@@ -1,4 +1,4 @@
-# R_Airbnb Project
+# R_Airbnb 
 
 Background: For this Kaggle Project, a listing of over 25,000 Airbnb rentals in NYC is given. The goal is to predict the price for rentals using over 90 variables.
 
