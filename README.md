@@ -1,6 +1,9 @@
 # R_Airbnb 
+Fall 2018 5200 Frameworks&Methods Kaggle Project
 
-Background: For this Kaggle Project, a listing of over 25,000 Airbnb rentals in NYC is given. The goal is to predict the price for rentals using over 90 variables.
+Dataset: For this Kaggle Project, a listing of over 25,000 Airbnb rentals in NYC is given. 
+
+Objective: The goal is to predict the price for rentals using over 90 variables.
 
 Submission: 
 1. R Working code
