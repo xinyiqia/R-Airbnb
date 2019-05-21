@@ -1,0 +1,230 @@
+---
+title: "Kaggle Project Appendix"
+output: html_document
+---
+
+```{r}
+# setting working directory
+setwd('C:/Users/qianx/OneDrive/Books/R/Kaggle/')
+```
+
+```{r}
+# read analysis and socring data 
+data = read.csv('analysisData.csv')
+scoringData = read.csv('scoringData.csv')
+```
+
+```{r}
+###Data Exploration 
+str(data)
+summary(data)
+head(data)
+```
+
+```{r}
+# Data exporation - Visualization with ggplot
+install.packages("ggplot2")
+library(ggplot2)
+ggplot(data_caret,aes(cleaning_fee, price))+geom_point()
+```
+
+```{r}
+###clean data - replace missing values using median
+install.packages("caret")
+library(caret)
+data_caret = predict(preProcess(data,method = 'medianImpute'),newdata = data)
+scoringData_caret = predict(preProcess(scoringData,method = 'medianImpute'),newdata = scoringData)
+```
+
+```{r}
+###Data Exploration & cleaning
+# extract year from host_since data
+install.packages("stringr")
+library(stringr)
+install.packages("dplyr")
+library(dplyr)
+host_since_year <- substr(as.character(data_caret$host_since),1, 4)
+host_since_year <- as.factor(host_since_year)
+data_caret  <- data_caret %>% 
+mutate(host_since_year)
+host_since_year <- substr(as.character(scoringData_caret$host_since),1,4)
+host_since_year <- as.factor(host_since_year)
+scoringData_caret  <- scoringData_caret %>% 
+     mutate(host_since_year)
+# change the data type of host_response_rate
+data_caret$host_response_rate <- as.numeric(data_caret$host_response_rate)
+scoringData_caret$host_response_rate <- as.numeric(scoringData_caret$host_response_rate)
+```
+
+```{r}
+###Data Exploration & cleaning
+# count # of amentity
+library(stringr)
+data_caret$amenities <- as.character(data_caret$amenities)
+sapply(strsplit(data_caret$amenities, ","), length)
+data_caret$amenities <- sapply(strsplit(data_caret$amenities, ","), length)
+scoringData_caret$amenities <- as.character(scoringData_caret$amenities)
+scoringData_caret$amenities <- sapply(strsplit(scoringData_caret$amenities, ","), length)
+```
+
+```{r}
+#use 0 to replace NA in cleaning_fee
+install.packages("dplyr")
+library(dplyr)
+cleaning_fee_0 <- replace(data$cleaning_fee,is.na(data$cleaning_fee),"0")
+cleaning_fee_0 <- as.numeric(cleaning_fee_0)
+data_caret <- data_caret %>%
+mutate(cleaning_fee_0)
+cleaning_fee_0 <- replace(scoringData$cleaning_fee,is.na(scoringData$cleaning_fee),"0")
+cleaning_fee_0 <- as.numeric(cleaning_fee_0)
+scoringData_caret <- scoringData_caret %>%
+mutate(cleaning_fee_0)
+#use 0 to replace NA in security deposit
+security_deposit_0 <- replace(data$security_deposit,is.na(data$security_deposit),"0")
+security_deposit_0 <- as.numeric(security_deposit_0)
+data_caret <- data_caret %>%
+mutate(security_deposit_0)
+security_deposit_0 <- replace(scoringData$security_deposit,is.na(scoringData$security_deposit),"0")
+security_deposit_0 <- as.numeric(security_deposit_0)
+scoringData_caret <- scoringData_caret %>%
+mutate(security_deposit_0)
+```
+
+```{r}
+###Data Exploration & cleaning
+# extract year in last_review
+last_review_year <- substr(as.character(data$last_review),1, 4)
+data_caret  <- data_caret %>% 
+     mutate(last_review_year)
+data_caret$last_review_year <- as.factor(data_caret$last_review_year)
+last_review_year <- substr(as.character(scoringData_caret$last_review),1, 4)
+scoringData_caret  <- scoringData_caret %>% 
+     mutate(last_review_year)
+scoringData_caret$last_review_year<-as.factor(scoringData_caret$last_review_year)
+```
+
+```{r}
+# check the threat of collinearity
+install.packages("car")
+library(car)
+model1 =lm(price~availability_30+availability_60+availability_90+availability_365,data_caret)
+vif(model1)
+```
+
+```{r}
+#Feature selection - lasso 
+install.packages("glmnet")
+library(glmnet)
+ x= model.matrix(price~host_since_year+host_response_rate+host_total_listings_count+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+beds+amenities+cleaning_fee+guests_included+extra_people+minimum_nights+availability_365+review_scores_location+instant_bookable+is_business_travel_ready+cancellation_policy,data_caret)
+y=data_caret$price
+lassoModel = glmnet(x,y,alpha =1)
+cv.lasso=cv.glmnet(x,y,alpha=1)
+coef(cv.lasso)
+```
+
+```{r}
+#Feature selection - hybrid stepwise regression
+start_mod = lm(price~1, data=data_caret)
+empty_mod = lm(price~1, data=data_caret)
+full_mod = lm(price~host_since_year+host_response_rate+host_total_listings_count+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+beds+amenities+cleaning_fee+guests_included+extra_people+minimum_nights+availability_365+review_scores_location+instant_bookable+is_business_travel_ready+cancellation_policy,data=data_caret)
+hybridStepwise = step(start_mod,scope=list(upper=full_mod,lower=empty_mod),direction='both')
+
+```
+
+```{r}
+# check the coefficiency 
+model =lm(price~last_review_year+host_since_year+host_response_rate+host_total_listings_count+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+beds+amenities+cleaning_fee+guests_included+extra_people+minimum_nights+availability_365+review_scores_location+cancellation_policy,data_caret)
+summary(model)
+# check the importance of variables 
+install.packages('caret')
+library(caret)
+varImp(model)
+```
+
+```{r}
+#boosting without cv - My best performance model
+install.packages('gbm')
+library(gbm)
+boost=gbm(price~last_review_year+host_since_year+host_response_time+host_response_rate+host_is_superhost+host_total_listings_count+host_has_profile_pic+host_identity_verified+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+bathrooms*bedrooms+beds+amenities+security_deposit_0+cleaning_fee_0+guests_included+extra_people+minimum_nights+availability_30+availability_90+availability_365+number_of_reviews+review_scores_rating+review_scores_cleanliness+review_scores_checkin+review_scores_communication+review_scores_location+review_scores_value+is_business_travel_ready+cancellation_policy+require_guest_profile_picture+reviews_per_month,data_caret,distribution="gaussian",
+            n.trees=500,
+            interaction.depth=6,
+            shrinkage=0.1)
+predBoost=predict(boost,scoringData_caret,n.trees=500)
+```
+
+```{r}
+# construct submision from predictions
+submissionFile = data.frame(id = scoringData$id, price = predBoost)
+write.csv(submissionFile, 'sample_submission12022.csv',row.names = F)
+```
+
+```{r}
+### below are the parts that I didnt not include in my final best performance model but I still tried during the process.
+```
+
+```{r}
+###Data Exploration & cleaning - some additional cleaning steps that were not included in the final analysis
+#count words in summary
+data_caret$summary <- as.character(data$summary)
+data_caret$summary <- sapply(strsplit(data_caret$summary, " "), length)
+scoringData_caret$summary <- as.character(scoringData_caret$summary)
+scoringData_caret$summary <- sapply(strsplit(scoringData_caret$summary, " "), length)
+
+#detect keyword "Luxury" in the name of the listing
+name_Luxury <- str_detect(data$name, "Luxury")
+data_caret <- data_caret %>%
+     mutate(name_Luxury)
+data_caret$name_Luxury <- as.factor(data_caret$name_Luxury)
+name_Luxury <- str_detect(scoringData$name, "Luxury")
+scoringData_caret <- scoringData_caret %>%
+     mutate(name_Luxury)
+```
+
+```{r}
+#Feature selection - tree model to filter variables
+install.packages('rpart')
+install.packages('rpart.plot')
+library(rpart)
+library(rpart.plot)
+tree1=rpart(earn~.,data=train)
+prp(tree1,digits=5)
+treeComplex = rpart(host_since_year+host_response_rate+host_total_listings_count+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+beds+amenities+cleaning_fee+guests_included+extra_people+minimum_nights+availability_365+review_scores_location+instant_bookable+is_business_travel_ready+cancellation_policy,data_caret,control=rpart.control(minbucket = 1))
+prp(treeComplex,digits=5)
+```
+
+```{r}
+#linear model with interaction
+model2=lm(price~(host_since_year+host_response_rate+host_total_listings_count+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+beds+amenities+cleaning_fee+guests_included+extra_people+minimum_nights+availability_365+review_scores_location+instant_bookable+is_business_travel_ready+cancellation_policy)^2,data_caret)
+```
+
+```{r}
+# Random Forest with cv
+trControl=trainControl(method="cv",number =10)
+tuneGrid = expand.grid(mtry=1:5)
+library(randomForest)
+set.seed(100)
+cvForest=train(price~host_since_year+host_response_rate+host_total_listings_count+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+beds+amenities+cleaning_fee+guests_included+extra_people+minimum_nights+availability_365+review_scores_location+instant_bookable+is_business_travel_ready+cancellation_policy,data_caret,method = "rf",ntree=1000,trControl=trControl,tuneGrid = tuneGrid)
+
+forest = randomForest(price~host_since_year+host_response_rate+host_total_listings_count+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+beds+amenities+cleaning_fee+guests_included+extra_people+minimum_nights+availability_365+review_scores_location+instant_bookable+is_business_travel_ready+cancellation_policy,data_caret,ntree=200,mtry=5)
+```
+
+```{r}
+#boosting with cv
+install.packages('gbm')
+library(gbm)
+install.packages('rpart')
+install.packages('rpart.plot')
+library(rpart)
+library(rpart.plot)
+set.seed(100)
+trControl=trainControl(method="cv",number=10)
+tuneGrid=expand.grid(n.trees=10000,interaction.depth=c(1,2),
+                     shrinkage=(1:100)*0.001,n.minobsinnode=5)
+cvBoost=train(price~last_review_year+host_since_year+host_response_time+host_response_rate+host_is_superhost+host_total_listings_count+host_has_profile_pic+host_identity_verified+neighbourhood_group_cleansed+latitude+longitude+room_type+accommodates+bathrooms+bedrooms+bathrooms*bedrooms+beds+amenities+security_deposit_0+cleaning_fee_0+guests_included+extra_people+minimum_nights+availability_30+availability_90+availability_365+number_of_reviews+review_scores_rating+review_scores_cleanliness+review_scores_checkin+review_scores_communication+review_scores_location+review_scores_value+is_business_travel_ready+cancellation_policy+require_guest_profile_picture+reviews_per_month,data_caret,method="gbm")
+
+boostCV=gbm(price~,data_caret,distribution="gaussian",
+            n.trees=cvBoost$bestTune$n.trees,
+            interaction.depth=cvBoost$bestTune$interaction.depth,
+            shrinkage=cvBoost$bestTune$shrinkage,
+            n.minobsinnode=cvBoost$bestTune$n.minobsinnode)
+```
